@@ -1,0 +1,11 @@
+{
+  "name": "seance",
+  "description": "Commune with past Claude Code sessions. Use for recalling past work, exploring session history, or resurrecting abandoned tasks.",
+  "version": "1.0.0",
+  "author": {
+    "name": "cbzehner",
+    "email": "chris@cbzehner.com"
+  },
+  "repository": "https://github.com/cbzehner/claude-skill-seance",
+  "license": "MIT"
+}

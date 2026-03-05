@@ -46,14 +46,21 @@ Seance explores your session history through conversation. Ask questions about p
 
 ## Installation
 
+### From Marketplace
+
 ```bash
-git clone https://github.com/cbzehner/claude-skill-seance ~/.claude/skills/seance
+# Add the marketplace
+/plugin marketplace add cbzehner/claude-skill-seance
+
+# Install the skill
+/plugin install seance@cbzehner
 ```
 
-Or symlink:
+### Manual Installation
 
 ```bash
-ln -s /path/to/claude-skill-seance ~/.claude/skills/seance
+cd ~/.claude/skills/
+git clone https://github.com/cbzehner/claude-skill-seance.git seance
 ```
 
 ## Requirements
