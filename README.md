@@ -50,7 +50,7 @@ Seance explores your session history through conversation. Ask questions about p
 
 ```bash
 # Add the marketplace
-/plugin marketplace add cbzehner/claude-skill-seance
+/plugin marketplace add cbzehner/skill-seance
 
 # Install the skill
 /plugin install seance@cbzehner
@@ -60,7 +60,7 @@ Seance explores your session history through conversation. Ask questions about p
 
 ```bash
 cd ~/.claude/skills/
-git clone https://github.com/cbzehner/claude-skill-seance.git seance
+git clone https://github.com/cbzehner/skill-seance.git seance
 ```
 
 ## Requirements
