@@ -1,6 +1,6 @@
 ---
 name: seance
-description: Commune with past Claude Code sessions. Use for recalling past work, exploring session history, finding previous sessions, or resurrecting abandoned work. Use this whenever the user asks about previous work, past sessions, what they were doing before, or wants to continue something they started earlier.
+description: Commune with past local agent sessions. Use for recalling past work, exploring session history, finding previous sessions, or resurrecting abandoned work. Use this whenever the user asks about previous work, past sessions, what they were doing before, or wants to continue something they started earlier.
 argument-hint: "[question or resurrect target]"
 allowed-tools: Bash, Read, Write, Task
 ---
@@ -23,14 +23,37 @@ All paths except quick list use the same Oracle engine. The word "resurrect" sig
 
 - **Current session context** — if the answer is in this conversation, don't search old sessions
 - **Git history questions** — use `git log` / `git blame` for code authorship and change history
-- **Non-Claude work** — seance only searches Claude Code sessions, not shell history or editor sessions
+- **Non-agent work** — seance only searches local agent session logs, not shell history or editor sessions
 
 ## Path Resolution
+
+Detect which session store is available. Try both; use whichever has data.
+
+### Claude Code sessions
 
 ```
 SESSION_DIR=!`echo "$HOME/.claude/projects/$(echo "$PWD" | sed 's|/|-|g')"`
 INDEX_FILE=!`echo "$HOME/.claude/projects/$(echo "$PWD" | sed 's|/|-|g')/sessions-index.json"`
 ```
+
+### Codex sessions
+
+```
+CODEX_SESSIONS_DIR=~/.codex/sessions
+```
+
+Codex stores sessions at `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`. Each
+file starts with a `session_meta` line containing `payload.cwd`. Filter for
+entries where `payload.cwd` matches `$PWD`.
+
+### Resolution order
+
+1. If `$INDEX_FILE` exists and has entries → use Claude Code store
+2. Else if `$CODEX_SESSIONS_DIR` exists → scan Codex JSONL files
+3. Else → "No sessions found"
+
+Set `SESSION_BACKEND` to `claude` or `codex` so downstream steps know which
+format to parse.
 
 ---
 
@@ -38,10 +61,25 @@ INDEX_FILE=!`echo "$HOME/.claude/projects/$(echo "$PWD" | sed 's|/|-|g')/session
 
 When user runs `/seance` with no arguments:
 
+**Claude Code backend:**
 ```bash
 jq -r '.entries | sort_by(.modified) | reverse | .[:10][] |
   "\(.modified | .[0:10])  \(.sessionId | .[0:8])  \(.messageCount // 0 | tostring | if length < 3 then " " * (3 - length) + . else . end) msgs  \(.summary // .firstPrompt // "No summary" | .[0:55])"' \
-  "$INDEX_FILE" 2>/dev/null || echo "No sessions found for this project"
+  "$INDEX_FILE" 2>/dev/null || echo "No sessions found"
+```
+
+**Codex backend:**
+```bash
+# Scan recent Codex session files, filter by cwd, extract first user message
+for f in $(ls -t ~/.codex/sessions/*/*/*.jsonl 2>/dev/null | head -20); do
+  cwd=$(head -1 "$f" | jq -r '.payload.cwd // empty' 2>/dev/null)
+  if [ "$cwd" = "$PWD" ]; then
+    ts=$(head -1 "$f" | jq -r '.payload.timestamp // empty' | cut -c1-10)
+    id=$(head -1 "$f" | jq -r '.payload.id // empty' | cut -c1-8)
+    summary=$(grep -m1 '"type":"user_message"' "$f" | jq -r '.payload.content // "No summary"' | cut -c1-55)
+    echo "$ts  $id  $summary"
+  fi
+done
 ```
 
 Present as:
@@ -85,14 +123,20 @@ For info-intent questions, check if time scope is ambiguous:
 | "What was I working on last week?" | Proceed (explicit) |
 | "Why does auth keep breaking?" | Search all (no time constraint) |
 
-### Dispatch Haiku Subagent
+### Dispatch Oracle Subagent
 
+**Claude Code:** Use a Task subagent with the Claude session index.
 ```
 Task:
   subagent_type: "general-purpose"
   model: "haiku"
-  prompt: [see ${CLAUDE_SKILL_DIR}/oracle-prompt.md — substitute $INDEX_FILE, $SESSION_DIR, <USER_INPUT>, and <INFO|ACTION>]
+  prompt: [see oracle-prompt.md — substitute $INDEX_FILE, $SESSION_DIR, <USER_INPUT>, and <INFO|ACTION>]
 ```
+
+**Codex / other hosts:** Run the oracle inline or as a lightweight subprocess.
+Adapt the oracle prompt to search Codex JSONL files instead of the Claude
+session index. The oracle's job is the same — scan sessions, find relevant
+content, format the response — only the data source changes.
 
 The oracle prompt template contains: available jq queries for session exploration, output JSON schemas for both info and action intents, and constraints on scope/citations. Read it before dispatching.
 
@@ -151,7 +195,7 @@ Ready to start? Just say "go" or ask me to adjust the plan.
 **No sessions:**
 ```
 No sessions found for this project.
-Try running from a directory where you've used Claude Code.
+Try running from a directory where you've used this agent before.
 ```
 
 **Target not found:**
@@ -180,4 +224,3 @@ sed -E \
   -e 's/sk-[A-Za-z0-9]{32,}/sk-[REDACTED]/g' \
   -e 's/ghp_[A-Za-z0-9]{36}/ghp_[REDACTED]/g'
 ```
-
